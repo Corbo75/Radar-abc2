@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#020a05">
+<!-- Desactivation stricte du cache navigateur -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Radar ABC+Moi — Navigation & Duo</title>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<style>
+:root{box-sizing:border-box}
+*,*:before,*:after{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:#020a05;color:#5dff9a;font-family:ui-monospace,Menlo,Consolas,monospace}
+body{min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:8px;padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));user-select:none;-webkit-user-select:none}
+#top{text-align:center;width:100%;min-height:66px}
+#big{font-size:32px;font-weight:800;line-height:1.15}
+#sub{font-size:15px;margin-top:4px}
+#st{font-size:12px;opacity:.75;margin-top:4px;min-height:15px}
+canvas{display:block;width:min(92vw,52vh);height:min(92vw,52vh);max-width:620px;max-height:620px;touch-action:none}
+#pts{width:100%;max-width:620px;display:flex;flex-direction:column;gap:6px}
+.pt{display:flex;gap:6px}
+button{appearance:none;background:#04210f;color:#5dff9a;border:1px solid #1f8a4c;border-radius:10px;padding:11px 8px;font:inherit;font-size:14px;min-height:46px;cursor:pointer}
+button:active{background:#0a4a24}
+button:disabled{opacity:.45}
+.lab{flex:1;text-align:left;border-width:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mk,.cl{flex:0 0 54px}
+.row{display:flex;gap:6px;width:100%;max-width:620px}
+.row button{flex:1}
+#gps{border-color:#36c76f}
+#gps.off{border-color:#777;color:#aaa}
+#gps.busy{border-color:#e0bd42;color:#e0bd42}
+
+/* Modales & Panneaux */
+.panel{position:fixed;inset:0;background:rgba(2,10,5,0.98);display:none;flex-direction:column;z-index:25;padding:15px;max-width:620px;margin:0 auto;border:1px solid #1f8a4c}
+.panel-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:1px solid #1f8a4c;padding-bottom:10px}
+#journal-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-right:2px}
+.log-item{background:#04210f;border:1px solid #0a4a24;border-radius:8px;padding:10px;font-size:13px;line-height:1.4}
+.log-top{display:flex;justify-content:space-between;font-weight:bold;margin-bottom:4px}
+.log-coords{font-size:12px;color:#8a9a90}
+
+#ov,#sleep{position:fixed;inset:0;background:#020a05;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;z-index:20;padding:24px;gap:16px}
+#sleep{display:none;background:#000;color:#0f4}
+#go{font-size:22px;padding:20px 34px;background:#0a4a24;color:#ffffff;border:2px solid #5dff9a}
+.small{max-width:390px;font-size:14px;line-height:1.45;opacity:.86}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);max-width:90vw;padding:10px 14px;background:#071b0d;border:1px solid #1f8a4c;border-radius:10px;text-align:center;display:none;z-index:30}
+input[type="text"]{background:#04210f;border:1px solid #1f8a4c;color:#ff7700;padding:10px;font-family:inherit;font-size:18px;border-radius:8px;text-align:center;width:100%;max-width:200px}
+</style>
+</head>
+<body>
+<div id="top">
+  <div id="big">&mdash;</div>
+  <div id="sub">Active le GPS puis marque un point avec &#128205;</div>
+  <div id="st"></div>
+</div>
+
+<canvas id="c" width="700" height="700" aria-label="Radar"></canvas>
+
+<div id="pts"></div>
+
+<div class="row">
+  <button id="gps">&#128205; GPS : d&eacute;sactiv&eacute;</button>
+  <button id="snd">&#128066; Sonar : on</button>
+</div>
+<div class="row">
+  <button id="slp">&#127769; &Eacute;cran noir</button>
+  <button id="clear">&#9851; R&eacute;initialiser A,B,C</button>
+</div>
+<div class="row">
+  <button id="open-duo" style="border-color:#ff7700;color:#ff7700">&#129309; Mode Duo / &Eacute;quipier</button>
+  <button id="open-journal" style="border-color:#36c76f">&#128220; Journal</button>
+</div>
+
+<!-- Volet Journal -->
+<div id="journal-panel" class="panel">
+  <div class="panel-header">
+    <span style="font-size:16px;font-weight:bold">&#128220; Historique des points</span>
+    <button id="close-journal" style="min-height:auto;padding:6px 12px">&#10006; Fermer</button>
+  </div>
+  <div id="journal-list"></div>
+  <div style="margin-top:12px;display:flex;gap:10px">
+    <button id="clear-hist" style="flex:1;border-color:#ff6a5d;color:#ff6a5d">&#128465; Effacer le journal</button>
+  </div>
+</div>
+
+<!-- Volet Mode Duo -->
+<div id="duo-panel" class="panel">
+  <div class="panel-header">
+    <span style="font-size:16px;font-weight:bold">&#129309; Connexion Duo (&Eacute;quipier)</span>
+    <button id="close-duo" style="min-height:auto;padding:6px 12px">&#10006; Fermer</button>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:16px;align-items:center;text-align:center;padding:10px 0;">
+    <div style="font-size:14px;opacity:.8">Partage ta position en direct avec un co&eacute;quipier sur son propre radar.</div>
+    
+    <div style="border:1px dashed #1f8a4c;padding:15px;border-radius:10px;width:100%">
+      <div style="font-weight:bold;margin-bottom:8px">Option 1 : Cr&eacute;er une session</div>
+      <button id="btn-create-duo" style="width:100%">G&eacute;n&eacute;rer un code d'appairage</button>
+      <div id="my-code-display" style="font-size:22px;font-weight:bold;color:#ff7700;margin-top:10px"></div>
+    </div>
+
+    <div style="border:1px dashed #1f8a4c;padding:15px;border-radius:10px;width:100%">
+      <div style="font-weight:bold;margin-bottom:8px">Option 2 : Rejoindre un &eacute;quipier</div>
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:8px">
+        <input type="text" id="join-code-input" placeholder="Code (ex: 4821)" maxlength="6">
+        <button id="btn-join-duo">&#128279; Connecter</button>
+      </div>
+    </div>
+
+    <div id="duo-status" style="font-size:13px;color:#e0bd42">Statut : Non connect&eacute;</div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- Ecran d'accueil Overlay -->
+<div id="ov">
+  <div style="font-size:26px">&#128262; Radar ABC+Moi</div>
+  <div class="small">
+    1. Appuie sur D&eacute;marrer.<br>
+    2. Autorise la boussole et le GPS.<br>
+    3. Marque A, B, C ou connecte un co&eacute;quipier en mode Duo !
+  </div>
+  <button id="go" onclick="forceStart()">&#9654; D&eacute;marrer</button>
+</div>
+
+<div id="sleep">
+  <div id="sd" style="font-size:46px"></div>
+  <div id="sm" style="font-size:20px"></div>
+  <div style="opacity:.4;font-size:13px;margin-top:24px">Touche l'écran pour quitter</div>
+</div>
+
+<script>
+'use strict';
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(function(registrations) {
+    for(let registration of registrations) { registration.unregister(); }
+  });
+}
+
+function forceStart(){
+  document.getElementById('ov').style.display = 'none';
+  started = true;
+  try { audio(); } catch(e){}
+  try { startOrientation(); } catch(e){}
+  try { startGPS(); } catch(e){}
+  try { refresh(); } catch(e){}
+}
+
+const $ = id => document.getElementById(id);
+const cv = $('c');
+const g = cv.getContext('2d');
+
+const KEYS = ['A','B','C','E'];
+const COL = {A:'#ffdc50',B:'#4de0ff',C:'#ff6ad5',E:'#ff7700'};
+const FQ = {A:600, B:900, C:1200, E:1500}; // Tonalités sonar distinctes
+const NICE = [25,50,100,250,500,1000,2500,5000,10000,25000,100000];
+
+let P = {A:null,B:null,C:null,E:null};
+let history = [];
+let sel = 'A';
+let me = null;
+let gpsWatch = null;
+let gpsEnabled = false;
+let gpsBusy = false;
+let buf = [];
+
+let comp = null;
+let compT = 0;
+let gpsH = null;
+
+let soundOn = true;
+let ac = null;
+let started = false;
+
+let peer = null;
+let conn = null;
+
+let lastPingTime = 0;
+
+// Chargement local
+try {
+  const savedP = JSON.parse(localStorage.getItem('radarABC.points') || '{}');
+  ['A','B','C'].forEach(k => { 
+    if(savedP[k] && Number.isFinite(savedP[k].lat) && Number.isFinite(savedP[k].lon)) {
+      P[k] = savedP[k];
+    }
+  });
+  const savedH = JSON.parse(localStorage.getItem('radarABC.history') || '[]');
+  if(Array.isArray(savedH)) history = savedH;
+} catch(e) {}
+
+function save(){
+  try { 
+    const toSave = {A:P.A, B:P.B, C:P.C};
+    localStorage.setItem('radarABC.points', JSON.stringify(toSave)); 
+    localStorage.setItem('radarABC.history', JSON.stringify(history)); 
+  } catch(e) {}
+}
+
+const rad = d => d * Math.PI / 180;
+const deg = r => r * 180 / Math.PI;
+const norm = a => ((a % 360) + 360) % 360;
+
+function dist(a,b){
+  const R=6371000;
+  const dLa=rad(b.lat-a.lat), dLo=rad(b.lon-a.lon);
+  const x=Math.sin(dLa/2)**2 + Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(Math.min(1,x)));
+}
+
+function bearing(a,b){
+  const y=Math.sin(rad(b.lon-a.lon))*Math.cos(rad(b.lat));
+  const x=Math.cos(rad(a.lat))*Math.sin(rad(b.lat)) - Math.sin(rad(a.lat))*Math.cos(rad(b.lat))*Math.cos(rad(b.lon-a.lon));
+  return norm(deg(Math.atan2(y,x)));
+}
+
+function fmt(m){
+  return m < 1000 ? Math.round(m)+' m' : (m/1000).toFixed(2)+' km';
+}
+
+/* Boussole */
+function setComp(h){
+  if(!Number.isFinite(h)) return;
+  if(comp==null) comp=norm(h);
+  else {
+    const d=((h-comp+540)%360)-180;
+    comp=norm(comp+d*.25);
+  }
+  compT=performance.now();
+}
+
+function onAbs(e){ if(e && e.alpha != null) setComp(e.alpha); }
+function onRel(e){ if(e && Number.isFinite(e.webkitCompassHeading)) setComp(e.webkitCompassHeading); }
+
+function curHeading(){
+  if(comp!=null && performance.now()-compT < 4000) return {h:comp,src:'boussole'};
+  if(gpsH!=null) return {h:gpsH,src:'cap GPS'};
+  return {h:null,src:'aucun'};
+}
+
+function startOrientation(){
+  try {
+    window.addEventListener('deviceorientationabsolute', onAbs, true);
+    window.addEventListener('deviceorientation', onRel, true);
+  } catch(e) {}
+}
+
+/* GPS */
+function setGpsButton(){
+  const b=$('gps');
+  if(!b) return;
+  b.classList.remove('off','busy');
+  if(gpsBusy){
+    b.classList.add('busy');
+    b.innerHTML='&#128205; GPS : recherche\u2026';
+  } else if(gpsEnabled){
+    b.innerHTML='&#128205; GPS : activ\u00e9';
+  } else {
+    b.classList.add('off');
+    b.innerHTML='&#128205; GPS : d\u00e9sactiv\u00e9';
+  }
+}
+
+function resetPosition(){ me=null; gpsH=null; buf=[]; }
+
+function stopGPS(){
+  if(gpsWatch !== null && navigator.geolocation){
+    try { navigator.geolocation.clearWatch(gpsWatch); } catch(e) {}
+  }
+  gpsWatch=null; gpsEnabled=false; gpsBusy=false;
+  resetPosition(); setGpsButton(); refresh();
+}
+
+function gpsFailure(){
+  gpsBusy=false; gpsEnabled=false; gpsWatch=null;
+  resetPosition(); setGpsButton(); refresh();
+}
+
+function startGPS(){
+  if(!navigator.geolocation || gpsWatch !== null) return;
+  gpsBusy=true; gpsEnabled=true;
+  setGpsButton(); refresh();
+
+  try {
+    gpsWatch = navigator.geolocation.watchPosition(onGPS, gpsFailure, {
+      enableHighAccuracy:true, maximumAge:1000, timeout:15000
+    });
+  } catch(e) { gpsFailure(); }
+}
+
+function onGPS(p){
+  const c=p.coords;
+  if(!Number.isFinite(c.latitude) || !Number.isFinite(c.longitude)) return;
+
+  const f={ lat:c.latitude, lon:c.longitude, acc:Number.isFinite(c.accuracy) ? c.accuracy : 30 };
+  buf.push(f);
+  if(buf.length>5) buf.shift();
+
+  let sw=0,la=0,lo=0;
+  for(const b of buf){
+    const w=1/Math.max(b.acc,3)**2;
+    sw+=w; la+=b.lat*w; lo+=b.lon*w;
+  }
+
+  const previous=me;
+  me={lat:la/sw,lon:lo/sw,acc:f.acc};
+
+  if(Number.isFinite(c.heading) && Number.isFinite(c.speed) && c.speed>0.8) {
+    gpsH=norm(c.heading);
+  } else if(previous && dist(previous,me)>5) {
+    gpsH=bearing(previous,me);
+  }
+
+  if(conn && conn.open && me){
+    conn.send({type:'pos', lat:me.lat, lon:me.lon});
+  }
+
+  gpsBusy=false; setGpsButton(); refresh();
+}
+
+function toggleGPS(){
+  if(gpsEnabled) stopGPS();
+  else startGPS();
+}
+
+/* Audio Engine */
+function audio(){
+  try{
+    if(!ac) ac=new (window.AudioContext||window.webkitAudioContext)();
+    if(ac.state==='suspended') ac.resume();
+  }catch(e){}
+}
+
+// Sonar Pur : Émission + Écho dédié pour chaque point
+function playClassicSonar(key) {
+  if(!ac || !soundOn || ac.state !== 'running') return;
+  try {
+    const t = ac.currentTime;
+    const baseFreq = FQ[key] || 900;
+
+    // 1. Émission principale
+    const o1 = ac.createOscillator(), v1 = ac.createGain();
+    o1.type = 'sine';
+    o1.frequency.setValueAtTime(baseFreq, t);
+    o1.frequency.exponentialRampToValueAtTime(baseFreq * 0.7, t + 0.15);
+    v1.gain.setValueAtTime(0.3, t);
+    v1.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    o1.connect(v1); v1.connect(ac.destination);
+    o1.start(t); o1.stop(t + 0.18);
+
+    // 2. Écho / Résonance
+    const o2 = ac.createOscillator(), v2 = ac.createGain();
+    o2.type = 'sine';
+    o2.frequency.setValueAtTime(baseFreq * 0.5, t + 0.25);
+    v2.gain.setValueAtTime(0.001, t + 0.25);
+    v2.gain.linearRampToValueAtTime(0.12, t + 0.3);
+    v2.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
+    o2.connect(v2); v2.connect(ac.destination);
+    o2.start(t + 0.25); o2.stop(t + 0.8);
+  } catch(e) {}
+}
+
+function processSonarAudio(d, key) {
+  if(!soundOn || !ac || ac.state !== 'running') return;
+  const now = performance.now();
+
+  // Cadence constante Sonar : 1 bip toutes les 2 secondes
+  if (now - lastPingTime >= 2000) {
+    lastPingTime = now;
+    playClassicSonar(key);
+  }
+}
+
+/* PeerJS Duo */
+function initPeer(customId = null){
+  if(peer) peer.destroy();
+  const idToUse = customId ? 'radar-abc-' + customId : 'radar-abc-' + Math.floor(1000 + Math.random() * 9000);
+  peer = new Peer(idToUse);
+
+  peer.on('open', id => {
+    const cleanCode = id.replace('radar-abc-', '');
+    $('my-code-display').textContent = 'Ton Code : ' + cleanCode;
+    $('duo-status').textContent = 'En attente de l\'équipier (Code : ' + cleanCode + ')';
+  });
+
+  peer.on('connection', c => { conn = c; setupConn(); });
+  peer.on('error', () => { $('duo-status').textContent = 'Erreur de connexion duo.'; });
+}
+
+function setupConn(){
+  $('duo-status').textContent = 'Connecté avec l\'équipier !';
+  showToast('Équipier connecté !');
+  conn.on('data', data => {
+    if(data.type === 'pos' && Number.isFinite(data.lat) && Number.isFinite(data.lon)){
+      P.E = {lat: data.lat, lon: data.lon};
+      refresh();
+    }
+  });
+  conn.on('close', () => {
+    $('duo-status').textContent = 'Équipier déconnecté.';
+    P.E = null;
+    refresh();
+  });
+}
+
+$('btn-create-duo').onclick = () => { initPeer(); };$('btn-join-duo').onclick = () => {
+  const code = $('join-code-input').value.trim();
+  if(!code) return;
+  if(!peer) peer = new Peer();
+  conn = peer.connect('radar-abc-' + code);
+  conn.on('open', () => { setupConn(); });
+  conn.on('error', () => { $('duo-status').textContent = 'Impossible de rejoindre ce code.'; });
+};
+
+/* Calculs & Visualisation */
+function calc(){
+  const H=curHeading();
+  const hh=H.h==null ? 0 : H.h;
+  const items=[];
+  let mx=0;
+
+  if(me){
+    for(const k of KEYS){
+      const p=P[k];
+      if(!p) continue;
+      const d=dist(me,p);
+      const b=bearing(me,p);
+      items.push({k,d,b,rel:norm(b-hh)});
+      mx=Math.max(mx,d);
+    }
+  }
+
+  const rng=NICE.find(n=>n>=Math.max(mx*1.1,1)) || NICE[NICE.length-1];
+  return {items,H,hh,rng};
+}
+
+const CARD=['Nord','Nord-Est','Est','Sud-Est','Sud','Sud-Ouest','Ouest','Nord-Ouest'];
+function words(it,hasH){
+  if(!hasH) return 'vers le '+CARD[Math.round(it.b/45)%8];
+  const W=['devant','devant \u00e0 droite','\u00e0 droite','derri\u00e8re \u00e0 droite','derri\u00e8re','derri\u00e8re \u00e0 gauche','\u00e0 gauche','devant \u00e0 gauche'];
+  return W[Math.round(it.rel/45)%8];
+}
+
+$('open-duo').onclick = () => { $('duo-panel').style.display = 'flex'; };$('close-duo').onclick = () => { $('duo-panel').style.display = 'none'; };$('open-journal').onclick = () => { renderJournal(); $('journal-panel').style.display = 'flex'; };$('close-journal').onclick = () => { $('journal-panel').style.display = 'none'; };$('clear-hist').onclick = () => { history = []; save(); renderJournal(); showToast('Journal effacé.'); };
+
+$('clear').onclick = () => {
+  P.A = null; P.B = null; P.C = null;
+  save(); refresh(); showToast('Points A, B et C réinitialisés.');
+};
+
+function drawRadar(S){
+  const w = cv.width, h = cv.height;
+  const cx = w/2, cy = h/2;
+  const r = Math.min(w, h) * 0.43;
+
+  g.clearRect(0,0,w,h);
+
+  g.save();
+  g.beginPath();
+  g.arc(cx, cy, r, 0, Math.PI*2);
+  g.fillStyle = '#010f06';
+  g.fill();
+  g.strokeStyle = '#1f8a4c';
+  g.lineWidth = 3;
+  g.stroke();
+
+  [0.33, 0.66, 1].forEach(ratio => {
+    g.beginPath();
+    g.arc(cx, cy, r * ratio, 0, Math.PI*2);
+    g.strokeStyle = 'rgba(31, 138, 76, 0.4)';
+    g.lineWidth = 1;
+    g.stroke();
+  });
+
+  g.beginPath();
+  g.moveTo(cx - r, cy); g.lineTo(cx + r, cy);
+  g.moveTo(cx, cy - r); g.lineTo(cx, cy + r);
+  g.strokeStyle = 'rgba(31, 138, 76, 0.3)';
+  g.stroke();
+
+  if(me && S.items){
+    S.items.forEach(it => {
+      const relRad = rad(it.rel - 90);
+      const distRatio = Math.min(1, it.d / S.rng);
+      const px = cx + Math.cos(relRad) * (r * distRatio);
+      const py = cy + Math.sin(relRad) * (r * distRatio);
+
+      g.beginPath();
+      g.arc(px, py, 8, 0, Math.PI*2);
+      g.fillStyle = COL[it.k] || '#fff';
+      g.fill();
+
+      g.fillStyle = '#ffffff';
+      g.font = 'bold 14px monospace';
+      g.fillText(it.k, px + 12, py + 4);
+    });
+  }
+
+  g.restore();
+}
+
+function buildRows(){
+  $('pts').innerHTML=KEYS.map(k=>{
+    if(k === 'E') {
+      return `
+      <div class="pt">
+        <button class="lab" data-k="E" style="border-color:${COL.E};color:${COL.E}"></button>
+        <button class="cl" data-c="E" title="Masquer E">&#10006;</button>
+      </div>`;
+    }
+    return `
+    <div class="pt">
+      <button class="lab" data-k="${k}" style="border-color:${COL[k]};color:${COL[k]}"></button>
+      <button class="mk" data-m="${k}" title="Marquer ${k}">&#128205;</button>
+      <button class="cl" data-c="${k}" title="Effacer ${k}">&#10006;</button>
+    </div>`;
+  }).join('');
+}
+buildRows();
+
+function renderJournal(){
+  const list = $('journal-list');
+  if(!history || history.length === 0){
+    list.innerHTML = '<div style="text-align:center;padding:20px;opacity:.5">Aucun point enregistré</div>';
+    return;
+  }
+  list.innerHTML = history.map(item => `
+    <div class="log-item">
+      <div class="log-top">
+        <span style="color:${COL[item.k]}">Point ${item.k}</span>
+        <span style="opacity:.7;font-weight:normal">${item.date}</span>
+      </div>
+      <div class="log-coords">Lat : ${item.lat.toFixed(6)}° | Lon : ${item.lon.toFixed(6)}°</div>
+    </div>
+  `).join('');
+}
+
+function showToast(msg){
+  const t=$('toast');
+  t.textContent=msg;
+  t.style.display='block';
+  clearTimeout(showToast.timer);
+  showToast.timer=setTimeout(()=>t.style.display='none',3000);
+}
+
+$('pts').addEventListener('click',e=>{
+  const t=e.target.closest('button');
+  if(!t) return;
+
+  if(t.dataset.k){
+    sel=t.dataset.k;
+  } else if(t.dataset.m){
+    const k=t.dataset.m;
+    if(!started || !gpsEnabled || !me){
+      showToast('Active le GPS pour marquer la position.');
+      return;
+    }
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('fr-FR') + ' ' + now.toLocaleTimeString('fr-FR');
+    P[k] = { lat: me.lat, lon: me.lon, date: dateStr };
+    sel = k;
+    history.unshift({ k: k, lat: me.lat, lon: me.lon, date: dateStr });
+    save();
+    showToast('Point '+k+' enregistré.');
+  } else if(t.dataset.c){
+    P[t.dataset.c] = null;
+    save();
+  }
+  refresh();
+});
+
+function refresh(){
+  const S=calc();
+
+  document.querySelectorAll('.lab').forEach(b=>{
+    const k=b.dataset.k;
+    const it=S.items.find(i=>i.k===k);
+    let labelName = k === 'E' ? 'Équipier' : k;
+    b.textContent=(sel===k?'\u25b6 ':'')+labelName+' \u2014 '+
+      (P[k] ? (it ? fmt(it.d)+' \u00b7 '+words(it,S.H.h!=null) : 'enregistr\u00e9') : (k==='E'?'non connect\u00e9':'vide'));
+    b.style.background=sel===k?'#0a3a1c':'#04210f';
+  });
+
+  const it=S.items.find(i=>i.k===sel);
+
+  if(it){
+    let labelName = sel === 'E' ? 'Équipier' : sel;
+    $('big').textContent=labelName+' \u00b7 '+fmt(it.d);
+    $('big').style.color=COL[sel];$('sub').textContent=it.d<5?' Tu es arrivé !':words(it,S.H.h!=null);
+    processSonarAudio(it.d, sel);
+  } else {
+    $('big').textContent='\u2014';$('big').style.color='';
+    if(!started) $('sub').innerHTML='Active le GPS puis marque un point avec &#128205;';
+    else if(!gpsEnabled) $('sub').textContent='GPS d\u00e9sactiv\u00e9';
+    else if(!me) $('sub').textContent='Recherche de ta position GPS\u2026';
+    else $('sub').innerHTML='Appuie sur &#128205; pour marquer '+sel;
+  }
+
+  const H=S.H;
+  let cap='pas de boussole';
+  if(H.h!=null) cap='cap : '+H.src+' '+Math.round(H.h)+'\u00b0';
+
+  let gps='GPS d\u00e9sactiv\u00e9';
+  if(gpsEnabled) gps=me?'GPS \u00b1'+Math.round(me.acc)+' m':'GPS recherche\u2026';
+
+  $('st').textContent=started ? cap+' \u00b7 '+gps : '';
+
+  setGpsButton();
+  drawRadar(S);
+}
+
+setInterval(refresh,50);
+
+$('gps').onclick=toggleGPS;
+$('snd').onclick=()=>{ soundOn=!soundOn; $('snd').innerHTML='&#128066; Sonar : '+(soundOn?'on':'off'); audio(); };
+$('slp').onclick=()=>{ audio();$('sleep').style.display='flex'; };
+$('sleep').onclick=()=>{$('sleep').style.display='none'; };
+</script>
+</body>
+</html>
